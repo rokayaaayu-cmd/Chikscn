@@ -5,11 +5,19 @@ package-lock.json
 # Build output
 dist/
 
+# Android build outputs
+*.apk
+*.aab
+app/build/
+.gradle/
+local.properties
+
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.iml
 
 # OS files
 .DS_Store
@@ -33,10 +41,16 @@ npm-debug.log*
 *.pb
 models/
 *.h5
+app/src/main/assets/*.tflite
 
 # Dataset files
 datasets/
 *.zip
 *.tar.gz
+
+# Signing keys
+*.jks
+*.keystore
+key.properties
 .next/
 build/
