@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
@@ -19,17 +22,46 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Pre-accept Android SDK Licenses
+        run: |
+          ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}
+          mkdir -p $ANDROID_HOME/licenses
+          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_HOME/licenses/android-sdk-license
+          echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" > $ANDROID_HOME/licenses/android-sdk-preview-license
+          echo -e "\nd975f751698a77b662f1254ddbeed3901e976f5a" > $ANDROID_HOME/licenses/intel-android-extra-license
+          echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55" > $ANDROID_HOME/licenses/google-gdk-license
+          echo -e "\nd56f5187479451eabf01fb78af6dfcb131a6481e" >> $ANDROID_HOME/licenses/android-sdk-license
+          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" >> $ANDROID_HOME/licenses/android-sdk-license
+          echo -e "\ne6b7c2ab7fa2298c15165e9583d0cbd08da9a086" >> $ANDROID_HOME/licenses/android-sdk-license
+          echo "✅ Licenses pre-accepted at $ANDROID_HOME/licenses"
+          ls -la $ANDROID_HOME/licenses/
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.5
 
       - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace --no-daemon
+
+      - name: Verify APK exists
+        run: |
+          ls -la app/build/outputs/apk/debug/ || echo "APK directory not found"
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            echo "✅ APK built successfully!"
+            ls -lh app/build/outputs/apk/debug/app-debug.apk
+          else
+            echo "❌ APK not found"
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
