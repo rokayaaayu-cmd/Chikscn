@@ -1,162 +1,166 @@
 # Live Count - Broiler Chicken Detection & Counting
 
-## Overview
+## 📱 Download APK
 
-Live Count is a real-time object detection and counting application for broiler chickens. It uses **TensorFlow.js** with the **COCO-SSD MobileNet v2** model for genuine ML inference, running directly in the browser with real camera access.
+The APK is automatically built by GitHub Actions on every push to `main`.
 
-## Architecture
+### How to Download:
+1. Go to the **Actions** tab on this GitHub repository
+2. Click on the latest **"Build APK"** workflow run
+3. Scroll down to **Artifacts**
+4. Click **`app-debug-apk`** to download the APK
+5. Transfer the APK to your Android device and install
 
-This web application implements the same architecture as a native Android app would:
+> **Note:** You may need to enable "Install from Unknown Sources" in your Android settings.
 
-| Android Native | Web Implementation |
+---
+
+## 🏗️ Architecture
+
+This project contains both a **native Android app** (Kotlin + Jetpack Compose) and a **web demo** (React + TensorFlow.js).
+
+### Android App (Native)
+| Component | Technology |
 |---|---|
-| CameraX | Browser MediaDevices API |
-| TensorFlow Lite / ONNX | TensorFlow.js (COCO-SSD) |
-| Jetpack Compose | React + Tailwind CSS |
-| Kotlin Coroutines | JavaScript async/await |
-| Android SDK | Web APIs (Canvas, WebRTC) |
+| UI Framework | Jetpack Compose + Material 3 |
+| Camera | CameraX |
+| ML Inference | TensorFlow Lite + ONNX Runtime |
+| Language | Kotlin |
+| Min SDK | 26 (Android 8.0) |
+| Build System | Gradle 8.5 + AGP 8.2.2 |
+| CI/CD | GitHub Actions |
 
-## Features
+### Web Demo
+| Component | Technology |
+|---|---|
+| UI Framework | React 18 + Tailwind CSS |
+| ML Inference | TensorFlow.js (COCO-SSD) |
+| Camera | MediaDevices API |
+| Build System | Vite |
 
-### 🎥 Real Camera Detection
-- **Live camera access** via `navigator.mediaDevices.getUserMedia()`
-- **Real TensorFlow.js inference** - COCO-SSD MobileNet v2 model
+## ✨ Features
+
+### 🎥 Real-Time Detection
+- **Live camera** via CameraX (Android) / MediaDevices (Web)
+- **TensorFlow Lite** on-device inference (Android)
+- **TensorFlow.js** browser inference (Web)
 - **Live bounding boxes** with tracking IDs
-- **Confidence scores** displayed per detection
-- **Green/Yellow/Red status indicators** (active/occluded/lost)
-- **Demo mode** for environments without camera access
+- **Confidence scores** per detection
+- **Green/Yellow/Red** status indicators (active/occluded/lost)
 
 ### 📊 Tracking & Counting
-- **IoU-based object tracking** prevents duplicate counting
-- **Unique Track IDs** assigned to each detected object
-- **Counting zones** with configurable regions
+- **IoU-based multi-object tracking** prevents duplicate counting
+- **Unique Track IDs** for each detected chicken
+- **Configurable counting zones** with real-time counters
 - **Path visualization** showing movement trajectories
 - **Manual correction** (+/-) for operator adjustments
-- **Session counters** with real-time statistics
+- **Session counters** with live statistics
 
 ### 🧠 Model Management
-- **Multiple model support** (TF.js, TFLite, ONNX formats)
-- **Model comparison** table with accuracy/speed metrics
-- **Active model selection** with one-click switching
-- **Import/export** model files
+- Multiple model support (TFLite, ONNX, TF.js)
+- Model comparison with accuracy/speed metrics
+- Active model selection
+- Import/export model files
 
 ### 📚 Training & Annotation
-- **Dataset import** with image upload
-- **Annotation viewer** with bounding box data
-- **Class management** for different detection targets
-- **Sandbox training** with progress visualization
-- **Training metrics** (loss, mAP, epochs)
+- Dataset import with image upload
+- Annotation viewer with bounding box data
+- Sandbox training with progress visualization
+- Training metrics (loss, mAP, epochs)
 
 ### 🧪 Test Lab
-- **Benchmark testing** with comprehensive metrics
-- **Live camera testing** with real-time FPS
-- **Precision/Recall/F1/mAP** calculations
-- **Test history** with detailed results
+- Model benchmark with comprehensive metrics
+- Live camera testing with real-time FPS
+- Precision/Recall/F1/mAP calculations
+- Test history with detailed results
 
 ### 📈 Reports & Analytics
-- **Session history** with full statistics
-- **Performance metrics** (accuracy, precision, recall, F1)
-- **Hourly distribution** charts
-- **Export to JSON/CSV** for external analysis
-- **Verification checklist** in exported reports
+- Session history with full statistics
+- Performance metrics (accuracy, precision, recall, F1)
+- Export to JSON/CSV for external analysis
+- Verification checklist in exported reports
 
-### ⚙️ Settings
-- **Detection parameters** (confidence, IoU, track age)
-- **Camera configuration** (facing, resolution)
-- **Display options** (boxes, IDs, confidence, zones)
-- **Counting zone** position adjustment
+## 📂 Project Structure
 
-## Screens
+```
+├── .github/workflows/build.yml     # GitHub Actions APK build
+├── app/                             # Android app module
+│   ├── build.gradle.kts            # App Gradle config (signing fixed)
+│   ├── proguard-rules.pro
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── java/com/livecount/app/
+│       │   ├── MainActivity.kt     # Main activity + Compose navigation
+│       │   ├── detection/
+│       │   │   ├── ChickenDetector.kt   # TFLite inference wrapper
+│       │   │   └── ObjectTracker.kt     # IoU tracking + zones
+│       │   ├── data/
+│       │   │   └── Models.kt            # Data classes
+│       │   └── ui/
+│       │       ├── screens/
+│       │       │   ├── CameraScreen.kt      # Live detection
+│       │       │   └── OtherScreens.kt      # Training, Models, etc.
+│       │       └── theme/
+│       │           └── Theme.kt             # Material 3 theme
+│       └── res/
+│           ├── values/
+│           ├── xml/
+│           ├── drawable/
+│           └── mipmap-anydpi-v26/
+├── src/                             # Web demo (React)
+│   ├── App.tsx
+│   ├── components/
+│   │   ├── CameraScreen.tsx
+│   │   ├── TrainingScreen.tsx
+│   │   ├── ModelManagerScreen.tsx
+│   │   ├── TestLabScreen.tsx
+│   │   ├── ReportsScreen.tsx
+│   │   └── SettingsScreen.tsx
+│   └── types.ts
+├── build.gradle.kts                 # Root Gradle config
+├── settings.gradle.kts
+├── gradle.properties
+├── gradle/wrapper/
+├── package.json                     # Web dependencies
+├── README.md
+├── VERIFICATION_CHECKLIST.md
+└── LICENSE
+```
 
-1. **Camera** - Live detection with real-time inference
-2. **Training** - Dataset management and model training
-3. **Model Manager** - Model selection and comparison
-4. **Test Lab** - Benchmark and live testing
-5. **Reports** - Analytics and data export
-6. **Settings** - Configuration and preferences
+## 🔨 Building
 
-## Technical Details
-
-### Real ML Inference
-- **Model**: COCO-SSD (Single Shot Detector) with MobileNet v2 backbone
-- **Framework**: TensorFlow.js v4.x
-- **Backend**: WebGL (GPU-accelerated) with WASM fallback
-- **Classes**: 80 COCO classes (detects 'bird' class for chickens)
-- **Model Size**: ~4MB (quantized lite version)
-- **Inference Time**: 25-50ms per frame on modern devices
-
-### Tracking Algorithm
-- **Method**: IoU (Intersection over Union) based matching
-- **Track ID Assignment**: Sequential unique IDs
-- **Max Track Age**: Configurable (default 5000ms)
-- **Duplicate Prevention**: Zone-based counting with state tracking
-- **Occlusion Handling**: Status indicators (active/occluded/lost)
-
-### Camera Access
-- Uses standard `getUserMedia()` API
-- Prefers rear-facing camera (`facingMode: 'environment'`)
-- Falls back to any available camera
-- Handles permission denied, not found, and security errors
-- Works in HTTPS and localhost contexts
-
-## Getting Started
-
+### Android APK (via GitHub Actions)
+The APK is built automatically on push to `main`. Manual build:
 ```bash
-# Install dependencies
+# Requires JDK 17 + Android SDK
+gradle assembleDebug
+# Output: app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Web Demo
+```bash
 npm install
-
-# Development server
-npm run dev
-
-# Production build
-npm run build
-
-# Type checking
-npm run typecheck
+npm run dev      # Development server
+npm run build    # Production build
 ```
 
-## Browser Requirements
+## ⚙️ Configuration
 
-- Chrome/Edge 90+ (recommended)
-- Firefox 85+
-- Safari 15+
-- Camera permission required for live detection
-- WebGL support required for GPU-accelerated inference
+### Detection Parameters
+- **Confidence Threshold**: 0.1 - 0.95 (default: 0.5)
+- **IoU Threshold**: 0.1 - 0.9 (default: 0.3)
+- **Max Track Age**: 1000 - 10000ms (default: 5000)
+- **Target Class**: Configurable (chicken, bird, etc.)
 
-## Project Structure
+### Camera Settings
+- **Facing**: Front/Back camera selection
+- **Resolution**: 320×240 to 1920×1080
+- **Frame Rate**: Up to 30 FPS
 
-```
-├── src/
-│   ├── App.tsx                    # Main app with navigation
-│   ├── types.ts                   # TypeScript interfaces
-│   ├── index.css                  # Global styles
-│   ├── main.tsx                   # Entry point
-│   └── components/
-│       ├── CameraScreen.tsx       # Live detection & camera
-│       ├── TrainingScreen.tsx     # Dataset & annotation
-│       ├── ModelManagerScreen.tsx # Model management
-│       ├── TestLabScreen.tsx      # Testing & benchmarks
-│       ├── ReportsScreen.tsx      # Analytics & export
-│       └── SettingsScreen.tsx     # Configuration
-├── index.html                     # HTML entry
-├── package.json                   # Dependencies
-├── vite.config.js                 # Build config
-├── tsconfig.json                  # TypeScript config
-├── README.md                      # This file
-├── VERIFICATION_CHECKLIST.md      # Verification checklist
-└── .gitignore                     # Git ignore rules
-```
+## 📋 Verification
 
-## Verification
+See [VERIFICATION_CHECKLIST.md](./VERIFICATION_CHECKLIST.md) for the complete verification checklist.
 
-See [VERIFICATION_CHECKLIST.md](./VERIFICATION_CHECKLIST.md) for the complete verification checklist covering:
-- Camera access verification
-- ML inference verification
-- Tracking accuracy verification
-- Counting accuracy verification
-- Performance benchmarks
-- Export verification
+## 📄 License
 
-## License
-
-MIT License - See LICENSE file for details.
+MIT License - See [LICENSE](./LICENSE) file.

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Chicken silhouette icon -->
+    <path
+        android:fillColor="#22C55E"
+        android:pathData="M54,30 C60,30 66,34 68,40 C70,46 68,52 64,56 C68,58 72,62 72,68 C72,74 68,78 62,78 L46,78 C40,78 36,74 36,68 C36,62 40,58 44,56 C40,52 38,46 40,40 C42,34 48,30 54,30 Z" />
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M54,26 C56,26 58,28 58,30 C58,32 56,34 54,34 C52,34 50,32 50,30 C50,28 52,26 54,26 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,42 A2,2 0 1,1 54,42 A2,2 0 1,1 50,42 Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M58,44 L64,46 L58,48 Z" />
+</vector>
