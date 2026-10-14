@@ -63,7 +63,7 @@ fun CameraScreen() {
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasCameraPermission = granted }
 
-    var isRunning by remember { mutableStateOf(false) }
+    var isRunning by remember { mutableStateOf(true) } // Auto-start camera
     var totalCount by remember { mutableStateOf(0) }
     var manualCorrection by remember { mutableStateOf(0) }
     var fps by remember { mutableStateOf(0) }
@@ -188,6 +188,7 @@ fun CameraScreen() {
         }
     }
 
+    // Auto-request camera permission on launch
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -250,9 +251,13 @@ fun CameraScreen() {
                         }
                     }
 
-                    // Draw detections
+                    // Draw detections - only ACTIVE ones with valid bounding boxes
                     if (showBoxes) {
-                        detections.forEach { det ->
+                        detections.filter { det ->
+                            det.status == Detection.Status.ACTIVE &&
+                            det.bbox[2] > 0.01f && det.bbox[3] > 0.01f && // Min size threshold
+                            det.bbox[2] < 0.95f && det.bbox[3] < 0.95f    // Max size threshold
+                        }.forEach { det ->
                             val color = when (det.status) {
                                 Detection.Status.ACTIVE -> Color(0xFF22C55E)
                                 Detection.Status.OCCLUDED -> Color(0xFFEAB308)
@@ -281,26 +286,28 @@ fun CameraScreen() {
                         .align(Alignment.TopStart)
                         .padding(8.dp)
                 ) {
-                    detections.take(5).forEach { det ->
-                        val color = when (det.status) {
-                            Detection.Status.ACTIVE -> Color(0xFF22C55E)
-                            Detection.Status.OCCLUDED -> Color(0xFFEAB308)
-                            Detection.Status.LOST -> Color(0xFFEF4444)
+                    detections.filter { it.status == Detection.Status.ACTIVE }
+                        .take(5)
+                        .forEach { det ->
+                            val color = when (det.status) {
+                                Detection.Status.ACTIVE -> Color(0xFF22C55E)
+                                Detection.Status.OCCLUDED -> Color(0xFFEAB308)
+                                Detection.Status.LOST -> Color(0xFFEF4444)
+                            }
+                            val label = if (showIds) {
+                                "#${det.trackId} ${(det.score * 100).toInt()}%"
+                            } else {
+                                "${(det.score * 100).toInt()}%"
+                            }
+                            Text(
+                                text = label,
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                modifier = Modifier
+                                    .background(color.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
                         }
-                        val label = if (showIds) {
-                            "#${det.trackId} ${(det.score * 100).toInt()}%"
-                        } else {
-                            "${(det.score * 100).toInt()}%"
-                        }
-                        Text(
-                            text = label,
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            modifier = Modifier
-                                .background(color.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
                 }
             }
         }

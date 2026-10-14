@@ -16,26 +16,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import com.livecount.app.data.DataRepository
 import com.livecount.app.data.ModelInfo
 import com.livecount.app.data.TrainingDataset
 import com.livecount.app.data.TestResult
 import com.livecount.app.data.SessionRecord
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 
 // ===================== TRAINING SCREEN =====================
 @Composable
 fun TrainingScreen() {
-    var datasets by remember {
-        mutableStateOf(
-            listOf(
-                TrainingDataset("1", "Broiler Dataset v1", 2500, 8420, listOf("chicken", "feeder", "waterer"), System.currentTimeMillis() - 604800000, "1.2 GB", "ready"),
-                TrainingDataset("2", "Overlap Cases", 800, 1200, listOf("chicken-overlapping", "chicken-group"), System.currentTimeMillis() - 259200000, "450 MB", "ready"),
-                TrainingDataset("3", "Occlusion Scenarios", 500, 680, listOf("chicken-partial", "chicken-hidden"), System.currentTimeMillis() - 86400000, "280 MB", "processing")
-            )
-        )
-    }
+    val context = LocalContext.current
+    val repository = remember { DataRepository(context) }
+    val scope = rememberCoroutineScope()
+    
+    var datasets by remember { mutableStateOf<List<TrainingDataset>>(emptyList()) }
     var selectedDataset by remember { mutableStateOf<String?>(null) }
     var isTraining by remember { mutableStateOf(false) }
     var trainingProgress by remember { mutableStateOf(0f) }
+    
+    // Load datasets from repository
+    LaunchedEffect(Unit) {
+        repository.getDatasets().collect { datasets = it }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -143,17 +148,17 @@ fun DatasetCard(ds: TrainingDataset, selected: Boolean, onClick: () -> Unit) {
 // ===================== MODEL MANAGER SCREEN =====================
 @Composable
 fun ModelManagerScreen() {
-    var models by remember {
-        mutableStateOf(
-            listOf(
-                ModelInfo("1", "COCO-SSD MobileNet v2", "1.0.0", "tfjs", "4.2 MB", 78.5f, 45, "ready"),
-                ModelInfo("2", "Broiler Detector v2", "2.1.0", "tflite", "12.8 MB", 92.3f, 28, "ready"),
-                ModelInfo("3", "Chicken Counter ONNX", "1.3.0", "onnx", "8.5 MB", 89.7f, 35, "ready"),
-                ModelInfo("4", "Overlap Resolver", "0.9.0", "tfjs", "6.1 MB", 85.2f, 52, "training")
-            )
-        )
+    val context = LocalContext.current
+    val repository = remember { DataRepository(context) }
+    val scope = rememberCoroutineScope()
+    
+    var models by remember { mutableStateOf<List<ModelInfo>>(emptyList()) }
+    var selectedModel by remember { mutableStateOf<String?>(null) }
+    
+    // Load models from repository
+    LaunchedEffect(Unit) {
+        repository.getModels().collect { models = it }
     }
-    var selectedModel by remember { mutableStateOf("1") }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -189,7 +194,16 @@ fun ModelManagerScreen() {
         }
         item { Text("Available Models", fontSize = 13.sp, color = Color.Gray) }
         items(models) { model ->
-            ModelCard(model, selectedModel == model.id, onActivate = { selectedModel = model.id })
+            ModelCard(
+                model, 
+                selectedModel == model.id, 
+                onActivate = { 
+                    selectedModel = model.id
+                    scope.launch {
+                        // Save selected model preference (could be extended to DataStore)
+                    }
+                }
+            )
         }
     }
 }
@@ -249,16 +263,18 @@ fun ModelCard(model: ModelInfo, isActive: Boolean, onActivate: () -> Unit) {
 // ===================== TEST LAB SCREEN =====================
 @Composable
 fun TestLabScreen() {
+    val context = LocalContext.current
+    val repository = remember { DataRepository(context) }
+    val scope = rememberCoroutineScope()
+    
     var isTesting by remember { mutableStateOf(false) }
     var testProgress by remember { mutableStateOf(0f) }
     var currentStep by remember { mutableStateOf("Ready") }
-    var results by remember {
-        mutableStateOf(
-            listOf(
-                TestResult("1", "1", "1", System.currentTimeMillis() - 86400000, 0.785f, 0.82f, 0.75f, 0.78f, 45f, 22f, 500, 412, 38, 50),
-                TestResult("2", "2", "1", System.currentTimeMillis() - 172800000, 0.923f, 0.94f, 0.90f, 0.92f, 28f, 35f, 500, 468, 15, 17)
-            )
-        )
+    var results by remember { mutableStateOf<List<TestResult>>(emptyList()) }
+    
+    // Load test results from repository
+    LaunchedEffect(Unit) {
+        repository.getTestResults().collect { results = it }
     }
 
     LazyColumn(
