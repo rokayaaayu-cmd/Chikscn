@@ -1,6 +1,7 @@
 package com.livecount.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,7 +35,7 @@ fun TrainingScreen() {
     }
     var selectedDataset by remember { mutableStateOf<String?>(null) }
     var isTraining by remember { mutableStateOf(false) }
-    var trainingProgress by remember { mutableFloatStateOf(0f) }
+    var trainingProgress by remember { mutableStateOf(0f) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -73,7 +74,7 @@ fun TrainingScreen() {
                     if (isTraining) {
                         Spacer(Modifier.height(12.dp))
                         LinearProgressIndicator(
-                            progress = { trainingProgress / 100f },
+                            progress = trainingProgress / 100f,
                             modifier = Modifier.fillMaxWidth().height(6.dp)
                         )
                         Text("${trainingProgress.toInt()}% • Epoch ${(trainingProgress / 2).toInt()}/50", fontSize = 10.sp, color = Color.Gray)
@@ -95,15 +96,20 @@ fun TrainingScreen() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DatasetCard(ds: TrainingDataset, selected: Boolean, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (selected) Modifier.border(1.dp, Color(0xFF3B82F6), RoundedCornerShape(12.dp))
+                else Modifier
+            ),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) Color(0xFF1E3A5F) else MaterialTheme.colorScheme.surface
-        ),
-        border = if (selected) androidx.compose.foundation.border(1.dp, Color(0xFF3B82F6), RoundedCornerShape(12.dp)).let { null } else null
+        )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -230,7 +236,7 @@ fun ModelCard(model: ModelInfo, isActive: Boolean, onActivate: () -> Unit) {
             if (model.accuracy > 0) {
                 Spacer(Modifier.height(8.dp))
                 LinearProgressIndicator(
-                    progress = { model.accuracy / 100f },
+                    progress = model.accuracy / 100f,
                     modifier = Modifier.fillMaxWidth().height(4.dp),
                     color = Color(0xFF22C55E)
                 )
@@ -244,7 +250,7 @@ fun ModelCard(model: ModelInfo, isActive: Boolean, onActivate: () -> Unit) {
 @Composable
 fun TestLabScreen() {
     var isTesting by remember { mutableStateOf(false) }
-    var testProgress by remember { mutableFloatStateOf(0f) }
+    var testProgress by remember { mutableStateOf(0f) }
     var currentStep by remember { mutableStateOf("Ready") }
     var results by remember {
         mutableStateOf(
@@ -268,7 +274,7 @@ fun TestLabScreen() {
                         Spacer(Modifier.height(8.dp))
                         Text(currentStep, fontSize = 11.sp, color = Color.Gray)
                         LinearProgressIndicator(
-                            progress = { testProgress / 100f },
+                            progress = testProgress / 100f,
                             modifier = Modifier.fillMaxWidth().height(6.dp)
                         )
                         Text("${testProgress.toInt()}%", fontSize = 10.sp, color = Color(0xFFF97316))
@@ -335,14 +341,15 @@ fun TestResultCard(result: TestResult) {
 }
 
 // ===================== REPORTS SCREEN =====================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsScreen() {
     var period by remember { mutableStateOf("today") }
-    val metrics = mapOf(
-        "Accuracy" to "86.4%" to Color(0xFF22C55E),
-        "Precision" to "88.2%" to Color(0xFF3B82F6),
-        "Recall" to "83.7%" to Color(0xFFA855F7),
-        "F1 Score" to "85.9%" to Color(0xFFF97316)
+    val metrics = listOf(
+        Triple("Accuracy", "86.4%", Color(0xFF22C55E)),
+        Triple("Precision", "88.2%", Color(0xFF3B82F6)),
+        Triple("Recall", "83.7%", Color(0xFFA855F7)),
+        Triple("F1 Score", "85.9%", Color(0xFFF97316))
     )
 
     LazyColumn(
@@ -375,8 +382,7 @@ fun ReportsScreen() {
         }
         item {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                metrics.entries.take(4).forEach { (label, valueColor) ->
-                    val (value, color) = valueColor
+                metrics.take(4).forEach { (label, value, color) ->
                     Card(modifier = Modifier.weight(1f)) {
                         Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(value, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = color)
@@ -422,11 +428,12 @@ fun SessionCard(session: SessionRecord) {
 }
 
 // ===================== SETTINGS SCREEN =====================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
-    var confidence by remember { mutableFloatStateOf(0.5f) }
-    var iou by remember { mutableFloatStateOf(0.3f) }
-    var maxTrackAge by remember { mutableIntStateOf(5000) }
+    var confidence by remember { mutableStateOf(0.5f) }
+    var iou by remember { mutableStateOf(0.3f) }
+    var maxTrackAge by remember { mutableStateOf(5000) }
     var cameraFacing by remember { mutableStateOf("back") }
     var resolution by remember { mutableStateOf("640x480") }
     var showBoxes by remember { mutableStateOf(true) }

@@ -43,6 +43,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen() {
     val context = LocalContext.current
@@ -62,11 +63,11 @@ fun CameraScreen() {
     ) { granted -> hasCameraPermission = granted }
 
     var isRunning by remember { mutableStateOf(false) }
-    var totalCount by remember { mutableIntStateOf(0) }
-    var manualCorrection by remember { mutableIntStateOf(0) }
-    var fps by remember { mutableIntStateOf(0) }
-    var sessionTime by remember { mutableIntStateOf(0) }
-    var activeTracks by remember { mutableIntStateOf(0) }
+    var totalCount by remember { mutableStateOf(0) }
+    var manualCorrection by remember { mutableStateOf(0) }
+    var fps by remember { mutableStateOf(0) }
+    var sessionTime by remember { mutableStateOf(0) }
+    var activeTracks by remember { mutableStateOf(0) }
     var detections by remember { mutableStateOf<List<Detection>>(emptyList()) }
     var zones by remember {
         mutableStateOf(
@@ -80,7 +81,7 @@ fun CameraScreen() {
     var showBoxes by remember { mutableStateOf(true) }
     var showIds by remember { mutableStateOf(true) }
     var showZones by remember { mutableStateOf(true) }
-    var confidence by remember { mutableFloatStateOf(0.5f) }
+    var confidence by remember { mutableStateOf(0.5f) }
 
     val detector = remember { ChickenDetector(context) }
     val tracker = remember { ObjectTracker() }
@@ -408,6 +409,7 @@ fun PermissionRequestCard(onRequest: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ControlsBar(
     isRunning: Boolean,
