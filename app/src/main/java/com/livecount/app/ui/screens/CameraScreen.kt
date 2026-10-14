@@ -41,6 +41,7 @@ import com.livecount.app.detection.CountingZone
 import com.livecount.app.data.SessionState
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.max
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,6 +87,18 @@ fun CameraScreen() {
     val detector = remember { ChickenDetector(context) }
     val tracker = remember { ObjectTracker() }
     val isProcessing = remember { AtomicBoolean(false) }
+    val previewViewRef = remember { androidx.compose.runtime.mutableStateOf<PreviewView?>(null) }
+    val cameraBound = remember { mutableStateOf(false) }
+
+    // Atomic references so the analyzer closure always reads the latest values
+    val latestZones = remember { AtomicReference(zones) }
+    val latestConfidence = remember { AtomicReference(confidence) }
+    val latestShowZones = remember { AtomicReference(showZones) }
+
+    // Keep atomic refs in sync with composable state
+    LaunchedEffect(zones) { latestZones.set(zones) }
+    LaunchedEffect(confidence) { latestConfidence.set(confidence) }
+    LaunchedEffect(showZones) { latestShowZones.set(showZones) }
 
     // Session timer
     LaunchedEffect(isRunning) {
@@ -112,6 +125,66 @@ fun CameraScreen() {
                     lastTime = now
                 }
             }
+        }
+    }
+
+    // Bind camera ONCE when isRunning becomes true
+    LaunchedEffect(isRunning, hasCameraPermission) {
+        if (isRunning && hasCameraPermission && !cameraBound.value) {
+            val previewView = previewViewRef.value ?: return@LaunchedEffect
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+            cameraProviderFuture.addListener({
+                try {
+                    val cameraProvider = cameraProviderFuture.get()
+                    val preview = Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
+                    }
+                    val imageAnalyzer = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                        .also {
+                            it.setAnalyzer(cameraExecutor) { imageProxy ->
+                                if (!isProcessing.getAndSet(true)) {
+                                    processFrame(
+                                        imageProxy, detector, tracker,
+                                        latestZones.get(),
+                                        latestConfidence.get(),
+                                        latestShowZones.get()
+                                    ) { newDetections, newZones, trackCount ->
+                                        detections = newDetections
+                                        zones = newZones
+                                        activeTracks = trackCount
+                                        isProcessing.set(false)
+                                    }
+                                } else {
+                                    imageProxy.close()
+                                }
+                            }
+                        }
+
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        CameraSelector.DEFAULT_BACK_CAMERA,
+                        preview, imageAnalyzer
+                    )
+                    cameraBound.value = true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, ContextCompat.getMainExecutor(context))
+        } else if (!isRunning && cameraBound.value) {
+            // Unbind camera when stopped
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+            cameraProviderFuture.addListener({
+                try {
+                    val cameraProvider = cameraProviderFuture.get()
+                    cameraProvider.unbindAll()
+                    cameraBound.value = false
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, ContextCompat.getMainExecutor(context))
         }
     }
 
@@ -142,51 +215,11 @@ fun CameraScreen() {
                         PreviewView(ctx).apply {
                             scaleType = PreviewView.ScaleType.FILL_CENTER
                             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                            previewViewRef.value = this
                         }
                     },
-                    modifier = Modifier.fillMaxSize(),
-                    update = { previewView ->
-                        if (isRunning) {
-                            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-                            cameraProviderFuture.addListener({
-                                val cameraProvider = cameraProviderFuture.get()
-                                val preview = Preview.Builder().build().also {
-                                    it.setSurfaceProvider(previewView.surfaceProvider)
-                                }
-                                val imageAnalyzer = ImageAnalysis.Builder()
-                                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                                    .build()
-                                    .also {
-                                        it.setAnalyzer(cameraExecutor) { imageProxy ->
-                                            if (!isProcessing.getAndSet(true)) {
-                                                processFrame(
-                                                    imageProxy, detector, tracker, zones,
-                                                    confidence, showZones
-                                                ) { newDetections, newZones, trackCount ->
-                                                    detections = newDetections
-                                                    zones = newZones
-                                                    activeTracks = trackCount
-                                                    isProcessing.set(false)
-                                                }
-                                            } else {
-                                                imageProxy.close()
-                                            }
-                                        }
-                                    }
-
-                                try {
-                                    cameraProvider.unbindAll()
-                                    cameraProvider.bindToLifecycle(
-                                        lifecycleOwner,
-                                        CameraSelector.DEFAULT_BACK_CAMERA,
-                                        preview, imageAnalyzer
-                                    )
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            }, ContextCompat.getMainExecutor(context))
-                        }
-                    }
+                    modifier = Modifier.fillMaxSize()
+                    // No update block - camera is bound via LaunchedEffect to prevent flickering
                 )
 
                 // Overlay: bounding boxes and zones
