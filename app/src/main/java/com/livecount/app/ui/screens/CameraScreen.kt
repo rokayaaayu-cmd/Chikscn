@@ -41,8 +41,10 @@ import com.livecount.app.detection.CountingZone
 import com.livecount.app.data.SessionState
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.max
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen() {
     val context = LocalContext.current
@@ -61,12 +63,12 @@ fun CameraScreen() {
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasCameraPermission = granted }
 
-    var isRunning by remember { mutableStateOf(false) }
-    var totalCount by remember { mutableIntStateOf(0) }
-    var manualCorrection by remember { mutableIntStateOf(0) }
-    var fps by remember { mutableIntStateOf(0) }
-    var sessionTime by remember { mutableIntStateOf(0) }
-    var activeTracks by remember { mutableIntStateOf(0) }
+    var isRunning by remember { mutableStateOf(true) } // Auto-start camera
+    var totalCount by remember { mutableStateOf(0) }
+    var manualCorrection by remember { mutableStateOf(0) }
+    var fps by remember { mutableStateOf(0) }
+    var sessionTime by remember { mutableStateOf(0) }
+    var activeTracks by remember { mutableStateOf(0) }
     var detections by remember { mutableStateOf<List<Detection>>(emptyList()) }
     var zones by remember {
         mutableStateOf(
@@ -80,11 +82,23 @@ fun CameraScreen() {
     var showBoxes by remember { mutableStateOf(true) }
     var showIds by remember { mutableStateOf(true) }
     var showZones by remember { mutableStateOf(true) }
-    var confidence by remember { mutableFloatStateOf(0.5f) }
+    var confidence by remember { mutableStateOf(0.5f) }
 
     val detector = remember { ChickenDetector(context) }
     val tracker = remember { ObjectTracker() }
     val isProcessing = remember { AtomicBoolean(false) }
+    val previewViewRef = remember { androidx.compose.runtime.mutableStateOf<PreviewView?>(null) }
+    val cameraBound = remember { mutableStateOf(false) }
+
+    // Atomic references so the analyzer closure always reads the latest values
+    val latestZones = remember { AtomicReference(zones) }
+    val latestConfidence = remember { AtomicReference(confidence) }
+    val latestShowZones = remember { AtomicReference(showZones) }
+
+    // Keep atomic refs in sync with composable state
+    LaunchedEffect(zones) { latestZones.set(zones) }
+    LaunchedEffect(confidence) { latestConfidence.set(confidence) }
+    LaunchedEffect(showZones) { latestShowZones.set(showZones) }
 
     // Session timer
     LaunchedEffect(isRunning) {
@@ -114,6 +128,67 @@ fun CameraScreen() {
         }
     }
 
+    // Bind camera ONCE when isRunning becomes true
+    LaunchedEffect(isRunning, hasCameraPermission) {
+        if (isRunning && hasCameraPermission && !cameraBound.value) {
+            val previewView = previewViewRef.value ?: return@LaunchedEffect
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+            cameraProviderFuture.addListener({
+                try {
+                    val cameraProvider = cameraProviderFuture.get()
+                    val preview = Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
+                    }
+                    val imageAnalyzer = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                        .also {
+                            it.setAnalyzer(cameraExecutor) { imageProxy ->
+                                if (!isProcessing.getAndSet(true)) {
+                                    processFrame(
+                                        imageProxy, detector, tracker,
+                                        latestZones.get(),
+                                        latestConfidence.get(),
+                                        latestShowZones.get()
+                                    ) { newDetections, newZones, trackCount ->
+                                        detections = newDetections
+                                        zones = newZones
+                                        activeTracks = trackCount
+                                        isProcessing.set(false)
+                                    }
+                                } else {
+                                    imageProxy.close()
+                                }
+                            }
+                        }
+
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        CameraSelector.DEFAULT_BACK_CAMERA,
+                        preview, imageAnalyzer
+                    )
+                    cameraBound.value = true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, ContextCompat.getMainExecutor(context))
+        } else if (!isRunning && cameraBound.value) {
+            // Unbind camera when stopped
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+            cameraProviderFuture.addListener({
+                try {
+                    val cameraProvider = cameraProviderFuture.get()
+                    cameraProvider.unbindAll()
+                    cameraBound.value = false
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, ContextCompat.getMainExecutor(context))
+        }
+    }
+
+    // Auto-request camera permission on launch
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -141,51 +216,11 @@ fun CameraScreen() {
                         PreviewView(ctx).apply {
                             scaleType = PreviewView.ScaleType.FILL_CENTER
                             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                            previewViewRef.value = this
                         }
                     },
-                    modifier = Modifier.fillMaxSize(),
-                    update = { previewView ->
-                        if (isRunning) {
-                            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-                            cameraProviderFuture.addListener({
-                                val cameraProvider = cameraProviderFuture.get()
-                                val preview = Preview.Builder().build().also {
-                                    it.setSurfaceProvider(previewView.surfaceProvider)
-                                }
-                                val imageAnalyzer = ImageAnalysis.Builder()
-                                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                                    .build()
-                                    .also {
-                                        it.setAnalyzer(cameraExecutor) { imageProxy ->
-                                            if (!isProcessing.getAndSet(true)) {
-                                                processFrame(
-                                                    imageProxy, detector, tracker, zones,
-                                                    confidence, showZones
-                                                ) { newDetections, newZones, trackCount ->
-                                                    detections = newDetections
-                                                    zones = newZones
-                                                    activeTracks = trackCount
-                                                    isProcessing.set(false)
-                                                }
-                                            } else {
-                                                imageProxy.close()
-                                            }
-                                        }
-                                    }
-
-                                try {
-                                    cameraProvider.unbindAll()
-                                    cameraProvider.bindToLifecycle(
-                                        lifecycleOwner,
-                                        CameraSelector.DEFAULT_BACK_CAMERA,
-                                        preview, imageAnalyzer
-                                    )
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            }, ContextCompat.getMainExecutor(context))
-                        }
-                    }
+                    modifier = Modifier.fillMaxSize()
+                    // No update block - camera is bound via LaunchedEffect to prevent flickering
                 )
 
                 // Overlay: bounding boxes and zones
@@ -216,9 +251,13 @@ fun CameraScreen() {
                         }
                     }
 
-                    // Draw detections
+                    // Draw detections - only ACTIVE ones with valid bounding boxes
                     if (showBoxes) {
-                        detections.forEach { det ->
+                        detections.filter { det ->
+                            det.status == Detection.Status.ACTIVE &&
+                            det.bbox[2] > 0.01f && det.bbox[3] > 0.01f && // Min size threshold
+                            det.bbox[2] < 0.95f && det.bbox[3] < 0.95f    // Max size threshold
+                        }.forEach { det ->
                             val color = when (det.status) {
                                 Detection.Status.ACTIVE -> Color(0xFF22C55E)
                                 Detection.Status.OCCLUDED -> Color(0xFFEAB308)
@@ -247,26 +286,28 @@ fun CameraScreen() {
                         .align(Alignment.TopStart)
                         .padding(8.dp)
                 ) {
-                    detections.take(5).forEach { det ->
-                        val color = when (det.status) {
-                            Detection.Status.ACTIVE -> Color(0xFF22C55E)
-                            Detection.Status.OCCLUDED -> Color(0xFFEAB308)
-                            Detection.Status.LOST -> Color(0xFFEF4444)
+                    detections.filter { it.status == Detection.Status.ACTIVE }
+                        .take(5)
+                        .forEach { det ->
+                            val color = when (det.status) {
+                                Detection.Status.ACTIVE -> Color(0xFF22C55E)
+                                Detection.Status.OCCLUDED -> Color(0xFFEAB308)
+                                Detection.Status.LOST -> Color(0xFFEF4444)
+                            }
+                            val label = if (showIds) {
+                                "#${det.trackId} ${(det.score * 100).toInt()}%"
+                            } else {
+                                "${(det.score * 100).toInt()}%"
+                            }
+                            Text(
+                                text = label,
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                modifier = Modifier
+                                    .background(color.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
                         }
-                        val label = if (showIds) {
-                            "#${det.trackId} ${(det.score * 100).toInt()}%"
-                        } else {
-                            "${(det.score * 100).toInt()}%"
-                        }
-                        Text(
-                            text = label,
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            modifier = Modifier
-                                .background(color.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
                 }
             }
         }
@@ -408,6 +449,7 @@ fun PermissionRequestCard(onRequest: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ControlsBar(
     isRunning: Boolean,

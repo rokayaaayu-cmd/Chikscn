@@ -3,7 +3,7 @@ package com.livecount.app.detection
 import android.content.Context
 import android.graphics.Bitmap
 import org.tensorflow.lite.support.image.TensorImage
-import org.tensorflow.lite.task.vision.detector.Detector
+import org.tensorflow.lite.task.vision.detector.ObjectDetector
 import org.tensorflow.lite.task.vision.detector.Detection as TFLiteDetection
 import java.io.FileInputStream
 import java.nio.MappedByteBuffer
@@ -15,14 +15,17 @@ import java.nio.channels.FileChannel
  */
 class ChickenDetector(private val context: Context) {
 
-    private var detector: Detector? = null
+    private var detector: ObjectDetector? = null
     private var isInitialized = false
 
     data class RawDetection(
         val bbox: FloatArray, // [x, y, width, height] normalized 0-1
         val score: Float,
         val className: String
-    )
+    ) {
+        val centerX: Float get() = bbox[0] + bbox[2] / 2f
+        val centerY: Float get() = bbox[1] + bbox[3] / 2f
+    }
 
     init {
         initializeDetector()
@@ -32,11 +35,11 @@ class ChickenDetector(private val context: Context) {
         try {
             // Load the TFLite model from assets
             val modelBuffer = loadModelFile("chicken_detector.tflite")
-            val options = Detector.DetectorOptions.builder()
+            val options = ObjectDetector.ObjectDetectorOptions.builder()
                 .setMaxResults(50)
                 .setScoreThreshold(0.3f)
                 .build()
-            detector = Detector.createFromFileAndOptions(modelBuffer, options)
+            detector = ObjectDetector.createFromBufferAndOptions(modelBuffer, options)
             isInitialized = true
         } catch (e: Exception) {
             // Fallback: try to download model or use bundled one
@@ -65,11 +68,11 @@ class ChickenDetector(private val context: Context) {
 
         return try {
             val tensorImage = TensorImage.fromBitmap(bitmap)
-            val results = detector?.detect(tensorImage) ?: emptyList()
+            val results: List<TFLiteDetection> = detector!!.detect(tensorImage)
 
             results
                 .filter { it.categories.any { cat -> cat.score >= confidenceThreshold } }
-                .map { detection ->
+                .map { detection: TFLiteDetection ->
                     val bestCategory = detection.categories.maxByOrNull { it.score }!!
                     val box = detection.boundingBox
                     val imgWidth = bitmap.width.toFloat()

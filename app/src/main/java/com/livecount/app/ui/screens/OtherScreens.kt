@@ -1,6 +1,7 @@
 package com.livecount.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,26 +16,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import com.livecount.app.data.DataRepository
 import com.livecount.app.data.ModelInfo
 import com.livecount.app.data.TrainingDataset
 import com.livecount.app.data.TestResult
 import com.livecount.app.data.SessionRecord
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 
 // ===================== TRAINING SCREEN =====================
 @Composable
 fun TrainingScreen() {
-    var datasets by remember {
-        mutableStateOf(
-            listOf(
-                TrainingDataset("1", "Broiler Dataset v1", 2500, 8420, listOf("chicken", "feeder", "waterer"), System.currentTimeMillis() - 604800000, "1.2 GB", "ready"),
-                TrainingDataset("2", "Overlap Cases", 800, 1200, listOf("chicken-overlapping", "chicken-group"), System.currentTimeMillis() - 259200000, "450 MB", "ready"),
-                TrainingDataset("3", "Occlusion Scenarios", 500, 680, listOf("chicken-partial", "chicken-hidden"), System.currentTimeMillis() - 86400000, "280 MB", "processing")
-            )
-        )
-    }
+    val context = LocalContext.current
+    val repository = remember { DataRepository(context) }
+    val scope = rememberCoroutineScope()
+    
+    var datasets by remember { mutableStateOf<List<TrainingDataset>>(emptyList()) }
     var selectedDataset by remember { mutableStateOf<String?>(null) }
     var isTraining by remember { mutableStateOf(false) }
-    var trainingProgress by remember { mutableFloatStateOf(0f) }
+    var trainingProgress by remember { mutableStateOf(0f) }
+    
+    // Load datasets from repository
+    LaunchedEffect(Unit) {
+        repository.getDatasets().collect { datasets = it }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -73,7 +79,7 @@ fun TrainingScreen() {
                     if (isTraining) {
                         Spacer(Modifier.height(12.dp))
                         LinearProgressIndicator(
-                            progress = { trainingProgress / 100f },
+                            progress = trainingProgress / 100f,
                             modifier = Modifier.fillMaxWidth().height(6.dp)
                         )
                         Text("${trainingProgress.toInt()}% • Epoch ${(trainingProgress / 2).toInt()}/50", fontSize = 10.sp, color = Color.Gray)
@@ -95,15 +101,20 @@ fun TrainingScreen() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DatasetCard(ds: TrainingDataset, selected: Boolean, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (selected) Modifier.border(1.dp, Color(0xFF3B82F6), RoundedCornerShape(12.dp))
+                else Modifier
+            ),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) Color(0xFF1E3A5F) else MaterialTheme.colorScheme.surface
-        ),
-        border = if (selected) androidx.compose.foundation.border(1.dp, Color(0xFF3B82F6), RoundedCornerShape(12.dp)).let { null } else null
+        )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -137,17 +148,17 @@ fun DatasetCard(ds: TrainingDataset, selected: Boolean, onClick: () -> Unit) {
 // ===================== MODEL MANAGER SCREEN =====================
 @Composable
 fun ModelManagerScreen() {
-    var models by remember {
-        mutableStateOf(
-            listOf(
-                ModelInfo("1", "COCO-SSD MobileNet v2", "1.0.0", "tfjs", "4.2 MB", 78.5f, 45, "ready"),
-                ModelInfo("2", "Broiler Detector v2", "2.1.0", "tflite", "12.8 MB", 92.3f, 28, "ready"),
-                ModelInfo("3", "Chicken Counter ONNX", "1.3.0", "onnx", "8.5 MB", 89.7f, 35, "ready"),
-                ModelInfo("4", "Overlap Resolver", "0.9.0", "tfjs", "6.1 MB", 85.2f, 52, "training")
-            )
-        )
+    val context = LocalContext.current
+    val repository = remember { DataRepository(context) }
+    val scope = rememberCoroutineScope()
+    
+    var models by remember { mutableStateOf<List<ModelInfo>>(emptyList()) }
+    var selectedModel by remember { mutableStateOf<String?>(null) }
+    
+    // Load models from repository
+    LaunchedEffect(Unit) {
+        repository.getModels().collect { models = it }
     }
-    var selectedModel by remember { mutableStateOf("1") }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -183,7 +194,16 @@ fun ModelManagerScreen() {
         }
         item { Text("Available Models", fontSize = 13.sp, color = Color.Gray) }
         items(models) { model ->
-            ModelCard(model, selectedModel == model.id, onActivate = { selectedModel = model.id })
+            ModelCard(
+                model, 
+                selectedModel == model.id, 
+                onActivate = { 
+                    selectedModel = model.id
+                    scope.launch {
+                        // Save selected model preference (could be extended to DataStore)
+                    }
+                }
+            )
         }
     }
 }
@@ -230,7 +250,7 @@ fun ModelCard(model: ModelInfo, isActive: Boolean, onActivate: () -> Unit) {
             if (model.accuracy > 0) {
                 Spacer(Modifier.height(8.dp))
                 LinearProgressIndicator(
-                    progress = { model.accuracy / 100f },
+                    progress = model.accuracy / 100f,
                     modifier = Modifier.fillMaxWidth().height(4.dp),
                     color = Color(0xFF22C55E)
                 )
@@ -243,16 +263,18 @@ fun ModelCard(model: ModelInfo, isActive: Boolean, onActivate: () -> Unit) {
 // ===================== TEST LAB SCREEN =====================
 @Composable
 fun TestLabScreen() {
+    val context = LocalContext.current
+    val repository = remember { DataRepository(context) }
+    val scope = rememberCoroutineScope()
+    
     var isTesting by remember { mutableStateOf(false) }
-    var testProgress by remember { mutableFloatStateOf(0f) }
+    var testProgress by remember { mutableStateOf(0f) }
     var currentStep by remember { mutableStateOf("Ready") }
-    var results by remember {
-        mutableStateOf(
-            listOf(
-                TestResult("1", "1", "1", System.currentTimeMillis() - 86400000, 0.785f, 0.82f, 0.75f, 0.78f, 45f, 22f, 500, 412, 38, 50),
-                TestResult("2", "2", "1", System.currentTimeMillis() - 172800000, 0.923f, 0.94f, 0.90f, 0.92f, 28f, 35f, 500, 468, 15, 17)
-            )
-        )
+    var results by remember { mutableStateOf<List<TestResult>>(emptyList()) }
+    
+    // Load test results from repository
+    LaunchedEffect(Unit) {
+        repository.getTestResults().collect { results = it }
     }
 
     LazyColumn(
@@ -268,7 +290,7 @@ fun TestLabScreen() {
                         Spacer(Modifier.height(8.dp))
                         Text(currentStep, fontSize = 11.sp, color = Color.Gray)
                         LinearProgressIndicator(
-                            progress = { testProgress / 100f },
+                            progress = testProgress / 100f,
                             modifier = Modifier.fillMaxWidth().height(6.dp)
                         )
                         Text("${testProgress.toInt()}%", fontSize = 10.sp, color = Color(0xFFF97316))
@@ -335,14 +357,15 @@ fun TestResultCard(result: TestResult) {
 }
 
 // ===================== REPORTS SCREEN =====================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsScreen() {
     var period by remember { mutableStateOf("today") }
-    val metrics = mapOf(
-        "Accuracy" to "86.4%" to Color(0xFF22C55E),
-        "Precision" to "88.2%" to Color(0xFF3B82F6),
-        "Recall" to "83.7%" to Color(0xFFA855F7),
-        "F1 Score" to "85.9%" to Color(0xFFF97316)
+    val metrics = listOf(
+        Triple("Accuracy", "86.4%", Color(0xFF22C55E)),
+        Triple("Precision", "88.2%", Color(0xFF3B82F6)),
+        Triple("Recall", "83.7%", Color(0xFFA855F7)),
+        Triple("F1 Score", "85.9%", Color(0xFFF97316))
     )
 
     LazyColumn(
@@ -375,8 +398,7 @@ fun ReportsScreen() {
         }
         item {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                metrics.entries.take(4).forEach { (label, valueColor) ->
-                    val (value, color) = valueColor
+                metrics.take(4).forEach { (label, value, color) ->
                     Card(modifier = Modifier.weight(1f)) {
                         Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(value, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = color)
@@ -422,11 +444,12 @@ fun SessionCard(session: SessionRecord) {
 }
 
 // ===================== SETTINGS SCREEN =====================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
-    var confidence by remember { mutableFloatStateOf(0.5f) }
-    var iou by remember { mutableFloatStateOf(0.3f) }
-    var maxTrackAge by remember { mutableIntStateOf(5000) }
+    var confidence by remember { mutableStateOf(0.5f) }
+    var iou by remember { mutableStateOf(0.3f) }
+    var maxTrackAge by remember { mutableStateOf(5000) }
     var cameraFacing by remember { mutableStateOf("back") }
     var resolution by remember { mutableStateOf("640x480") }
     var showBoxes by remember { mutableStateOf(true) }
